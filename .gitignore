@@ -1,0 +1,10 @@
+.DS_Store
+
+crawler/.venv/
+crawler/__pycache__/
+**/__pycache__/
+
+crawler/data/raw/
+crawler/data/processed/
+
+.env
