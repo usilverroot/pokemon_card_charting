@@ -8,15 +8,15 @@
 """
 
 import json
+import time
 from pathlib import Path
 
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-import pandas as pd
 
 BASE_URL = "https://pokemoncard.co.kr"
-IMAGE_BASE_URL = "https://cards.image.pokemonkorea.co.kr"
 API_URL = f"{BASE_URL}/v2/ajax2_dev2"
 
 HEADERS = {
@@ -25,14 +25,32 @@ HEADERS = {
     "Referer": "https://pokemoncard.co.kr/cards",
 }
 
+CARD_GROUPS = [
+    {
+        "group": "pokemon",
+        "card_type_num": "1",
+        "card_type": "기본,1진화,2진화,기본 포켓몬 ex,고대,미래,V,포켓몬 GX,일격,연격,퓨전,프리즘스타,포켓몬 EX,M진화,BREAK진화,복원,메가진화 ex",
+    },
+    {
+        "group": "trainers",
+        "card_type_num": "2",
+        "card_type": "아이템,포켓몬의 도구,서포,스타디움",
+    },
+    {
+        "group": "energy",
+        "card_type_num": "3",
+        "card_type": "기본 에너지",
+    },
+]
 
-def get_card_list():
+
+def get_card_list(card_type_num, card_type, page):
     payload = {
         "action": "get_more_cards",
-        "limit": "0",
+        "limit": str(page),
         "GoodsName": "",
-        "CardTypeNum": "1",
-        "CardType": "기본",
+        "CardTypeNum": card_type_num,
+        "CardType": card_type,
         "CardMonType": "풀,불꽃,물,번개,초,격투,악,강철,페어리,드래곤,무색,all",
         "Weakness": "풀,불꽃,물,번개,초,격투,악,강철,페어리,드래곤,무색,all",
         "Resistance": "풀,불꽃,물,번개,초,격투,악,강철,페어리,드래곤,무색,all",
@@ -51,17 +69,11 @@ def get_card_list():
         timeout=10,
     )
 
-    print("list status code:", response.status_code)
-
     json_start = response.text.find("{")
     clean_text = response.text[json_start:]
-
     data = json.loads(clean_text)
 
-    result = data.get("result", {})
-    print("card count:", len(result))
-
-    return result
+    return data.get("result", {})
 
 
 def save_html(card_id, html):
@@ -74,7 +86,7 @@ def save_html(card_id, html):
     return path
 
 
-def parse_card_detail(card_id):
+def parse_card_detail(card_id, group):
     detail_url = f"{BASE_URL}/cards/detail/{card_id}"
 
     response = requests.get(
@@ -83,10 +95,7 @@ def parse_card_detail(card_id):
         timeout=10,
     )
 
-    print("detail status code:", response.status_code)
-
-    save_path = save_html(card_id, response.text)
-    print("detail html saved:", save_path)
+    #save_html(card_id, response.text)
 
     soup = BeautifulSoup(response.text, "lxml")
 
@@ -94,49 +103,26 @@ def parse_card_detail(card_id):
     image_url = image_tag.get("src") if image_tag else None
 
     card_number_tag = soup.select_one("span.p_num")
-    card_number = (
-        card_number_tag.get_text(" ", strip=True)
-        if card_number_tag
-        else None
-    )
+    card_number = card_number_tag.get_text(" ", strip=True) if card_number_tag else None
 
     name_tag = soup.select_one("span.card-hp.title")
-    name = (
-        name_tag.get_text(" ", strip=True)
-        if name_tag
-        else None
-    )
+    name = name_tag.get_text(" ", strip=True) if name_tag else None
 
     hp_tag = soup.select_one("span.hp_num")
-    hp = (
-        hp_tag.get_text(" ", strip=True)
-        if hp_tag
-        else None
-    )
+    hp = hp_tag.get_text(" ", strip=True) if hp_tag else None
 
     type_tag = soup.select_one(".header img.type_b")
-    card_type = (
-        type_tag.get("title")
-        if type_tag
-        else None
-    )
+    card_type = type_tag.get("title") if type_tag else None
 
     category_tag = soup.select_one("div.pokemon-info")
-    category = (
-        category_tag.get_text(" ", strip=True)
-        if category_tag
-        else None
-    )
+    category = category_tag.get_text(" ", strip=True) if category_tag else None
 
     illustrator_tag = soup.select_one("p.illustrator")
-    illustrator = (
-        illustrator_tag.get_text(" ", strip=True)
-        if illustrator_tag
-        else None
-    )
+    illustrator = illustrator_tag.get_text(" ", strip=True) if illustrator_tag else None
 
-    parsed_card = {
+    return {
         "card_id": card_id,
+        "group": group,
         "name": name,
         "card_number": card_number,
         "hp": hp,
@@ -147,43 +133,63 @@ def parse_card_detail(card_id):
         "detail_url": detail_url,
     }
 
-    return parsed_card
-
 
 def main():
-    card_list = get_card_list()
-
-    if not card_list:
-        print("카드 목록이 비어 있습니다.")
-        return
-
     cards = []
+    seen_card_ids = set()
+    failed_cards = []
 
-    for item in card_list.values():
+    for group_info in CARD_GROUPS:
+        group = group_info["group"]
+        card_type_num = group_info["card_type_num"]
+        card_type = group_info["card_type"]
 
-        card_id = item["CardNum"]
+        print(f"\n=== {group} 수집 시작 ===")
 
-        print(f"\n수집중: {card_id}")
+        for page in range(0, 20):
+            print(f"\n페이지 수집중: group={group}, page={page}")
 
-        try:
-            parsed_card = parse_card_detail(card_id)
-            cards.append(parsed_card)
+            card_list = get_card_list(
+                card_type_num=card_type_num,
+                card_type=card_type,
+                page=page,
+            )
 
-        except Exception as e:
-            print(f"에러 발생: {card_id}")
-            print(e)
+            if not card_list:
+                print("더 이상 카드 없음. 다음 그룹으로 이동.")
+                break
+
+            for item in card_list.values():
+                card_id = item["CardNum"]
+
+                if card_id in seen_card_ids:
+                    continue
+
+                seen_card_ids.add(card_id)
+
+                print(f"상세 수집중: {card_id}")
+
+                try:
+                    parsed_card = parse_card_detail(card_id, group)
+                    cards.append(parsed_card)
+                    time.sleep(0.5)
+
+                except Exception as e:
+                    failed_cards.append(card_id)
+
+                    print(f"에러 발생: {card_id}")
+                    print(e)
+            time.sleep(1)
 
     print(f"\n총 수집 카드 수: {len(cards)}")
-
-    for card in cards[:3]:
-        print(json.dumps(card, ensure_ascii=False, indent=2))
-
+    print(f"실패 카드 수: {len(failed_cards)}")
+    print("실패 카드 목록:", failed_cards)
+    
     output_dir = Path("data/processed")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.DataFrame(cards)
-
-    csv_path = output_dir / "cards_sample.csv"
+    csv_path = output_dir / "cards_all_sample.csv"
 
     df.to_csv(
         csv_path,

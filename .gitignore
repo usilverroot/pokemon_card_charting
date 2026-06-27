@@ -1,10 +1,29 @@
-.DS_Store
-
+# Python
+.venv/
 crawler/.venv/
-crawler/__pycache__/
+__pycache__/
 **/__pycache__/
+*.pyc
 
+# JavaScript / Expo
+node_modules/
+.expo/
+.expo-home/
+work-npm-cache/
+mobile/dist/
+mobile/ios/
+mobile/modules/
+
+# Data
+data/
 crawler/data/raw/
 crawler/data/processed/
+crawler/data/images/
+backend/debug/
 
+# Mac
+.DS_Store
+
+# Local secrets
 .env
+crawler/.env

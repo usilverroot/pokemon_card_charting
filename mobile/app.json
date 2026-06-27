@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Pokemon Card Charting",
+    "slug": "pokemon-card-charting",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "pokemoncardcharting",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "카드를 촬영해 인식 후보를 찾기 위해 카메라를 사용합니다."
+      },
+      "bundleIdentifier": "com.anonymous.pokemon-card-charting"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "카드를 촬영해 인식 후보를 찾기 위해 카메라를 사용합니다."
+        }
+      ]
+    ]
+  }
+}
